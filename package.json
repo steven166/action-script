@@ -1,10 +1,15 @@
 {
-  "name": "cli-framework",
+  "name": "action-script",
   "version": "1.0.0",
-  "description": "Lightweight but robust framework for building cli applications in nodejs",
+  "description": "Build powerful and robust NodeJS Command Line Interfaces with action-script",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/steven166/action-script"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "./node_modules/.bin/gulp test",
+    "prepublish": "./node_modules/.bin/gulp prepublish"
   },
   "keywords": [
     "nodejs",
