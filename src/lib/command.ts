@@ -1,6 +1,8 @@
 import { Option, OptionOptions } from "./option";
 import { Flag, FlagOptions } from "./flag";
 import { Argument, ArgumentOptions } from "./argument";
+import { CommandArgs } from "./command-args";
+import { CommandExtends } from "./command-extends";
 
 const NAME_EXP = /\<(.*?)\>/g;
 
@@ -15,9 +17,10 @@ export class Command {
   private _arguments: Argument[] = [];
   private _options: Option[]     = [];
   private _flags: Flag[]         = [];
-  private _action: ( input?: { args?: any[], options?: any, flags?: any, pipeResult?: any }, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void;
-  private _extends: Command[]    = [];
-  private _order:number = 0;
+  private _action: ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void;
+  private _extends: CommandExtends[]    = [];
+  private _order: number         = 0;
+  private _strict:boolean = true;
 
   constructor( name?: string, parent?: Command ) {
     this._parent = parent;
@@ -63,7 +66,7 @@ export class Command {
     return this;
   }
 
-  public action( action: ( input?: { args?: any[], options?: any, flags?: any, pipeResult?: any }, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void ) {
+  public action( action: ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void) {
     this._action = action;
     return this;
   }
@@ -83,17 +86,30 @@ export class Command {
     return this;
   }
 
-  public extends( command: Command ) {
-    this._extends.push( command[ 'default' ] || command );
+  public extends( command: Command, overrideArgs?:(args:CommandArgs) => void ) {
+    let extend:CommandExtends = {
+      command: command[ 'default' ] || command ,
+      overrideArgs: overrideArgs
+    };
+    this._extends.push( extend );
     return this;
   }
 
-  public order(order:number){
+  public order( order: number ) {
     this._order = order;
     return this;
   }
 
-  public getExtends(): Command[] {
+  public strict(strict:boolean):void{
+    this._strict = strict;
+    return this;
+  }
+
+  public isStrict():boolean{
+    return this._strict;
+  }
+
+  public getExtends(): CommandExtends[] {
     return this._extends;
   }
 
@@ -145,8 +161,8 @@ export class Command {
   public getOptions(): Option[] {
     let options: Option[] = this._options;
     if ( this.getExtends() ) {
-      this.getExtends().forEach( ( ext: Command, index: number ) => {
-        options = ext.getOptions()
+      this.getExtends().forEach( ( ext: CommandExtends, index: number ) => {
+        options = ext.command.getOptions()
             .map( option => {
               option.order = option.order + 50 + index;
               return option;
@@ -163,8 +179,8 @@ export class Command {
   public getFlags(): Flag[] {
     let flags: Flag[] = this._flags;
     if ( this.getExtends() ) {
-      this.getExtends().forEach( ( ext: Command, index: number ) => {
-        flags = ext.getFlags()
+      this.getExtends().forEach( ( ext: CommandExtends, index: number ) => {
+        flags = ext.command.getFlags()
             .map( flag => {
               flag.order = flag.order + 50 + index;
               return flag;
@@ -210,7 +226,7 @@ export class Command {
     } )[ 0 ];
   }
 
-  public getAction(): ( input?: { args?: any[], options?: any, flags?: any, pipeResult?: any }, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void {
+  public getAction(): ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void {
     return this._action;
   }
 
@@ -233,9 +249,9 @@ export class Command {
       console.info( '' );
       options.forEach( option => {
         let prefix = '  ';
-        if(option.alias.length === 0){
-          prefix += '    ' + option.names.map( name => '--' + name ).join(', ');
-        }else{
+        if ( option.alias.length === 0 ) {
+          prefix += '    ' + option.names.map( name => '--' + name ).join( ', ' );
+        } else {
           prefix += option.alias.map( alias => '-' + alias ).concat( option.names.map( name => '--' + name ) ).join( ', ' );
         }
         if ( option.usage ) {
@@ -300,7 +316,9 @@ export class Command {
             this.showHelp( this );
           }
         } else {
-          this.showHelp( this, 1 );
+          if(this._strict) {
+            this.showHelp( this, 1 );
+          }
         }
       } else {
         args.push( arg );
@@ -339,11 +357,11 @@ export class Command {
       }
     }
     if ( this.getAction() ) {
-      let input: { args?: any[], options?: any, flags?: any, pipeResult?: any } = {
+      let input: CommandArgs = {
         args: args,
         options: options,
         flags: flags,
-        pipeResult: null
+        pipeResult: {}
       };
       this.invoke( this, input, ( result?: any ) => {
       }, ( err?: any ) => {
@@ -359,28 +377,46 @@ export class Command {
     this.showHelp( this, 1 );
   }
 
-  private invoke( command: Command, input: { args?: any[], options?: any, flags?: any, pipeResult?: any }, resolve: ( result?: any ) => void, reject: ( err?: any ) => void ): void {
+  private invoke( command: Command, input: CommandArgs, resolve: ( result?: any ) => void, reject: ( err?: any ) => void ): void {
     try {
       if ( command.getExtends() ) {
-        let promises = command.getExtends().map( ext => {
-          return new Promise( ( res: ( result?: any ) => void, rej: ( err?: any ) => void ) => {
-            ext.invoke( ext, input, res, rej );
-          } );
-        } );
-        Promise.all( promises ).then( ( results: any[] ) => {
+        this.invokeEach(command.getExtends(), 0, input, (pipeResult:any) => {
           try {
-            let result       = Object.assign( {}, results );
-            input.pipeResult = result;
+            if(pipeResult){
+              input.pipeResult = Object.assign(input.pipeResult, pipeResult);
+            }
             command.getAction()( input, resolve, reject );
           } catch ( e ) {
             reject( e );
           }
-        } );
+        }, reject);
       } else {
         command.getAction()( input, resolve, reject );
       }
     } catch ( err ) {
       reject( err );
+    }
+  }
+
+  private invokeEach( commands: CommandExtends[], cursor:number, input: CommandArgs, resolve: ( result?: any ) => void, reject: ( err?: any ) => void ): void {
+    let command = commands[cursor];
+    if(command){
+      if(command.overrideArgs){
+        command.overrideArgs(input);
+      }
+      this.invoke(command.command, input, (pipeResult:any) => {
+        if(pipeResult){
+          input.pipeResult = Object.assign(input.pipeResult, pipeResult);
+        }
+        cursor++;
+        if(commands[cursor]){
+          this.invokeEach(commands, cursor, input, resolve, reject);
+        }else{
+          resolve(input.pipeResult);
+        }
+      }, reject);
+    }else{
+      resolve(input.pipeResult);
     }
   }
 

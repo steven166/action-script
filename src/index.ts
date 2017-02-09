@@ -1,6 +1,7 @@
 
-export {Cli} from './cli';
-export {Command} from './command';
-export {Argument,ArgumentOptions} from './argument';
-export {Flag} from './flag';
-export {Option, OptionOptions} from './option';
+export {Cli} from './lib/cli';
+export {Command} from './lib/command';
+export {CommandArgs} from './lib/command-args'
+export {Argument,ArgumentOptions} from './lib/argument';
+export {Flag} from './lib/flag';
+export {Option, OptionOptions} from './lib/option';
