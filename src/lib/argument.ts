@@ -6,8 +6,8 @@ export class Argument{
   private _name: string;
 
   constructor(name:string, options?:ArgumentOptions){
-    this._required = (options && !options.optional) || true;
-    this._rest = (options && !options.rest) || false;
+    this._required = options ? !options.optional : true;
+    this._rest = options ? options.rest : false;
 
     if(name.lastIndexOf('...') === name.length-3){
       this._rest = true;

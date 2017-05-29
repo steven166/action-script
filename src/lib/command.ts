@@ -56,37 +56,37 @@ export class Command {
     this._name = name;
   }
 
-  public usage( usage: string ) {
+  public usage( usage: string ):Command {
     this._usage = usage;
     return this;
   }
 
-  public description( description: string ) {
+  public description( description: string ):Command {
     this._description = description;
     return this;
   }
 
-  public action( action: ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void) {
+  public action( action: ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void):Command {
     this._action = action;
     return this;
   }
 
-  public arg( name: string, options?: ArgumentOptions ) {
+  public arg( name: string, options?: ArgumentOptions ) :Command{
     this._arguments.push( new Argument( name, options ) );
     return this;
   }
 
-  public option( name: string, options?: OptionOptions ) {
+  public option( name: string, options?: OptionOptions ):Command {
     this._options.push( new Option( name, options ) );
     return this;
   }
 
-  public flag( name: string, options?: FlagOptions ) {
+  public flag( name: string, options?: FlagOptions ):Command {
     this._flags.push( new Flag( name, options ) );
     return this;
   }
 
-  public extends( command: Command, overrideArgs?:(args:CommandArgs) => void ) {
+  public extends( command: Command, overrideArgs?:(args:CommandArgs) => void ):Command {
     let extend:CommandExtends = {
       command: command[ 'default' ] || command ,
       overrideArgs: overrideArgs
@@ -95,12 +95,12 @@ export class Command {
     return this;
   }
 
-  public order( order: number ) {
+  public order( order: number ) :Command{
     this._order = order;
     return this;
   }
 
-  public strict(strict:boolean):void{
+  public strict(strict:boolean):Command{
     this._strict = strict;
     return this;
   }
