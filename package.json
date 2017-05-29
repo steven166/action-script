@@ -1,6 +1,6 @@
 {
   "name": "command-script",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Build powerful and robust NodeJS Command Line Interfaces with action-script",
   "main": "index.js",
   "repository": {
