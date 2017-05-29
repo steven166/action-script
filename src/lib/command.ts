@@ -307,6 +307,7 @@ export class Command {
           }
           let name        = option.getName();
           options[ name ] = option.parse( argv[ i + 1 ] );
+          i++;
         } else if ( flag ) {
           let name      = flag.getName();
           flags[ name ] = true;
@@ -340,7 +341,7 @@ export class Command {
       }
       if ( this.getArguments().length > 0 ) {
         let lastArg = this.getArguments()[ this.getArguments().length - 1 ];
-        if ( !lastArg.rest && args.length > this.getArguments().length ) {
+        if ( lastArg.required && !lastArg.rest && args.length > this.getArguments().length ) {
           this.showHelp( this, 1 );
         }
       }
