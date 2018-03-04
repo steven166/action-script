@@ -11,16 +11,17 @@ export class Command {
   private _parent: Command;
   private _version: string;
   private _name: string;
+  private _aliases: string[]         = [];
   private _usage: string;
   private _description: string;
-  private _commands: Command[]   = [];
-  private _arguments: Argument[] = [];
-  private _options: Option[]     = [];
-  private _flags: Flag[]         = [];
+  private _commands: Command[]       = [];
+  private _arguments: Argument[]     = [];
+  private _options: Option[]         = [];
+  private _flags: Flag[]             = [];
   private _action: ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void;
-  private _extends: CommandExtends[]    = [];
-  private _order: number         = 0;
-  private _strict:boolean = true;
+  private _extends: CommandExtends[] = [];
+  private _order: number             = 0;
+  private _strict: boolean           = true;
 
   constructor( name?: string, parent?: Command ) {
     this._parent = parent;
@@ -35,7 +36,7 @@ export class Command {
     this.flag( '-V, --version', { desc: 'output the version number', order: 2000 } );
   }
 
-  public command( name: string|Command ): Command {
+  public command( name: string | Command ): Command {
     if ( typeof(name) === 'object' ) {
       let command: Command = name[ 'default' ] || name;
       command.parent( this );
@@ -56,56 +57,75 @@ export class Command {
     this._name = name;
   }
 
-  public usage( usage: string ):Command {
+  public alias( alias: string ): Command {
+    this._aliases.push( alias );
+    return this;
+  }
+
+  public usage( usage: string ): Command {
     this._usage = usage;
     return this;
   }
 
-  public description( description: string ):Command {
+  public description( description: string ): Command {
     this._description = description;
     return this;
   }
 
-  public action( action: ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void):Command {
+  public action( action: ( input?: CommandArgs, resolve?: ( result?: any ) => void, reject?: ( err?: any ) => void ) => void ): Command {
     this._action = action;
     return this;
   }
 
-  public arg( name: string, options?: ArgumentOptions ) :Command{
+  public arg( name: string, options?: ArgumentOptions ): Command {
     this._arguments.push( new Argument( name, options ) );
     return this;
   }
 
-  public option( name: string, options?: OptionOptions ):Command {
-    this._options.push( new Option( name, options ) );
+  public option( name: string, options?: OptionOptions ): Command;
+  public option( option: Option ): Command;
+
+  public option( name: string | Option, options?: OptionOptions ): Command {
+    if ( name instanceof Option ) {
+      this._options.push( name );
+    } else {
+      this._options.push( new Option( name, options ) );
+    }
     return this;
   }
 
-  public flag( name: string, options?: FlagOptions ):Command {
-    this._flags.push( new Flag( name, options ) );
+  public flag( name: string, options?: FlagOptions ): Command;
+  public flag( flag: Flag ): Command;
+
+  public flag( name: string | Flag, options?: FlagOptions ): Command {
+    if ( name instanceof Flag ) {
+      this._flags.push( name );
+    } else {
+      this._flags.push( new Flag( name, options ) );
+    }
     return this;
   }
 
-  public extends( command: Command, overrideArgs?:(args:CommandArgs) => void ):Command {
-    let extend:CommandExtends = {
-      command: command[ 'default' ] || command ,
+  public extends( command: Command, overrideArgs?: ( args: CommandArgs ) => void ): Command {
+    let extend: CommandExtends = {
+      command: command[ 'default' ] || command,
       overrideArgs: overrideArgs
     };
     this._extends.push( extend );
     return this;
   }
 
-  public order( order: number ) :Command{
+  public order( order: number ): Command {
     this._order = order;
     return this;
   }
 
-  public strict(strict:boolean):Command{
+  public strict( strict: boolean ): Command {
     this._strict = strict;
     return this;
   }
 
-  public isStrict():boolean{
+  public isStrict(): boolean {
     return this._strict;
   }
 
@@ -122,6 +142,10 @@ export class Command {
       return this._parent.getFullName() + ' ' + this.getName();
     }
     return this.getName();
+  }
+
+  public getAliases(): string[] {
+    return this._aliases
   }
 
   public getUsage( useFullName: boolean = true ): string {
@@ -295,6 +319,11 @@ export class Command {
     for ( let i = 0; i < argv.length; i++ ) {
       let arg: string = argv[ i ];
       if ( arg.indexOf( '-' ) === 0 ) {
+        let value = null;
+        if ( arg.indexOf( '=' ) != -1 ) {
+          value = arg.split( '=' )[ 1 ];
+          arg   = arg.split( "=" )[ 0 ]
+        }
         let optionName: string = arg;
         while ( optionName.indexOf( '-' ) === 0 ) {
           optionName = optionName.substring( 1 );
@@ -302,12 +331,15 @@ export class Command {
         let option = this.getOption( optionName );
         let flag   = this.getFlag( optionName );
         if ( option ) {
-          if ( !argv[ i + 1 ] ) {
-            this.showHelp( this, 1 );
+          if ( value === null ) {
+            if ( !argv[ i + 1 ] ) {
+              this.showHelp( this, 1 );
+            }
+            value = option.parse( argv[ i + 1 ] );
+            i++;
           }
           let name        = option.getName();
-          options[ name ] = option.parse( argv[ i + 1 ] );
-          i++;
+          options[ name ] = value;
         } else if ( flag ) {
           let name      = flag.getName();
           flags[ name ] = true;
@@ -317,7 +349,7 @@ export class Command {
             this.showHelp( this );
           }
         } else {
-          if(this._strict) {
+          if ( this._strict ) {
             this.showHelp( this, 1 );
           }
         }
@@ -351,7 +383,7 @@ export class Command {
     if ( args.length > 0 ) {
       for ( let i = 0; i < this._commands.length; i++ ) {
         let command = this._commands[ i ];
-        if ( command.getName().toLowerCase() === args[ 0 ] ) {
+        if ( command.getName().toLowerCase() === args[ 0 ] || command.getAliases().filter( alias => alias.toLowerCase() === args[ 0 ] ).length > 0 ) {
           command.run( trail, options, flags );
           return;
         }
@@ -365,12 +397,18 @@ export class Command {
         pipeResult: {}
       };
       this.invoke( this, input, ( result?: any ) => {
+        if ( typeof(result) === 'object' ) {
+          result = JSON.stringify( result );
+        }
+        console.info( result );
+        process.exit( 0 );
       }, ( err?: any ) => {
         if ( input.flags[ 'cli-debug' ] ) {
           console.error( err.stack || err.message || err );
         } else {
           console.error( err );
         }
+        process.exit( 1 );
       } );
       return;
     }
@@ -381,16 +419,16 @@ export class Command {
   private invoke( command: Command, input: CommandArgs, resolve: ( result?: any ) => void, reject: ( err?: any ) => void ): void {
     try {
       if ( command.getExtends() ) {
-        this.invokeEach(command.getExtends(), 0, input, (pipeResult:any) => {
+        this.invokeEach( command.getExtends(), 0, input, ( pipeResult: any ) => {
           try {
-            if(pipeResult){
-              input.pipeResult = Object.assign(input.pipeResult, pipeResult);
+            if ( pipeResult ) {
+              input.pipeResult = Object.assign( input.pipeResult, pipeResult );
             }
             command.getAction()( input, resolve, reject );
           } catch ( e ) {
             reject( e );
           }
-        }, reject);
+        }, reject );
       } else {
         command.getAction()( input, resolve, reject );
       }
@@ -399,25 +437,25 @@ export class Command {
     }
   }
 
-  private invokeEach( commands: CommandExtends[], cursor:number, input: CommandArgs, resolve: ( result?: any ) => void, reject: ( err?: any ) => void ): void {
-    let command = commands[cursor];
-    if(command){
-      if(command.overrideArgs){
-        command.overrideArgs(input);
+  private invokeEach( commands: CommandExtends[], cursor: number, input: CommandArgs, resolve: ( result?: any ) => void, reject: ( err?: any ) => void ): void {
+    let command = commands[ cursor ];
+    if ( command ) {
+      if ( command.overrideArgs ) {
+        command.overrideArgs( input );
       }
-      this.invoke(command.command, input, (pipeResult:any) => {
-        if(pipeResult){
-          input.pipeResult = Object.assign(input.pipeResult, pipeResult);
+      this.invoke( command.command, input, ( pipeResult: any ) => {
+        if ( pipeResult ) {
+          input.pipeResult = Object.assign( input.pipeResult, pipeResult );
         }
         cursor++;
-        if(commands[cursor]){
-          this.invokeEach(commands, cursor, input, resolve, reject);
-        }else{
-          resolve(input.pipeResult);
+        if ( commands[ cursor ] ) {
+          this.invokeEach( commands, cursor, input, resolve, reject );
+        } else {
+          resolve( input.pipeResult );
         }
-      }, reject);
-    }else{
-      resolve(input.pipeResult);
+      }, reject );
+    } else {
+      resolve( input.pipeResult );
     }
   }
 
